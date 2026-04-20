@@ -1,0 +1,9 @@
+UIUX
+node_modules
+.claude
+.env
+.txt
+.md
+.expo
+.expo-shared
+package-lock.json
