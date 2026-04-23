@@ -20,6 +20,8 @@ import { formatRupiah } from '../../utils/formatCurrency';
 import { formatDisplayDateTime } from '../../utils/dateHelper';
 import EmptyState from '../../components/EmptyState';
 import type { PaymentMethod, TransactionItem } from '../../types/database';
+import { printService } from '../../services/printService';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 const txRepo = new TransactionRepository();
 
@@ -58,6 +60,7 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
 };
 
 export default function TransactionsScreen() {
+  const settings = useSettingsStore((s) => s.settings);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
@@ -70,6 +73,9 @@ export default function TransactionsScreen() {
   const [detailItems, setDetailItems] = useState<TransactionItem[]>([]);
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +139,33 @@ export default function TransactionsScreen() {
         },
       ]
     );
+  };
+
+  const handleShare = async () => {
+    if (!detailTx || sharing) return;
+    setSharing(true);
+    try {
+      const receiptData = printService.buildFromTransactionItems({
+        invoiceNumber: detailTx.invoice_number,
+        transactionDate: detailTx.transaction_date,
+        items: detailItems,
+        subtotal: detailTx.total_amount + (detailItems.reduce((s, i) => s + i.discount_per_item * i.quantity, 0)),
+        discountAmount: 0,
+        totalAmount: detailTx.total_amount,
+        paymentMethod: detailTx.payment_method,
+        paymentAmount: detailTx.total_amount,
+        changeAmount: 0,
+        storeName: settings?.store_name ?? 'Toko',
+        storeAddress: settings?.store_address ?? null,
+        storePhone: settings?.store_phone ?? null,
+        receiptNote: settings?.receipt_note ?? null,
+      });
+      await printService.shareReceiptAsPDF(receiptData);
+    } catch {
+      Alert.alert('Gagal', 'Tidak dapat membagikan struk');
+    } finally {
+      setSharing(false);
+    }
   };
 
   const filtered = (() => {
@@ -290,6 +323,22 @@ export default function TransactionsScreen() {
                 </View>
 
                 {/* Void section */}
+                {/* Share receipt button */}
+                <TouchableOpacity
+                  style={[shareStyles.shareBtn, sharing && shareStyles.btnDisabled]}
+                  onPress={handleShare}
+                  disabled={sharing}
+                >
+                  {sharing ? (
+                    <ActivityIndicator color="#6366F1" size="small" />
+                  ) : (
+                    <Ionicons name="share-social-outline" size={18} color="#6366F1" />
+                  )}
+                  <Text style={shareStyles.shareBtnText}>
+                    {sharing ? 'Menyiapkan...' : 'Bagikan Struk'}
+                  </Text>
+                </TouchableOpacity>
+
                 {detailTx.status === 'completed' && (
                   <View style={styles.voidSection}>
                     <Text style={styles.detailSection}>Void Transaksi</Text>
@@ -436,4 +485,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeDetailText: { fontSize: 15, fontWeight: '600', color: '#6B7280' },
+});
+
+const shareStyles = StyleSheet.create({
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+    marginBottom: 12,
+  },
+  btnDisabled: { opacity: 0.6 },
+  shareBtnText: { color: '#6366F1', fontSize: 14, fontWeight: '700' },
 });

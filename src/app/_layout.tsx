@@ -14,6 +14,8 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../stores/authStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { useAutolock } from '../hooks/useAutolock';
 import { COLORS } from '../theme/colors';
 import type { RootStackParamList, MainTabParamList } from '../types/navigation';
 
@@ -44,6 +46,8 @@ const TAB_ICONS: Record<string, string> = {
 };
 
 function TabNavigator() {
+  useAutolock();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -238,10 +242,15 @@ function SplashScreen() {
 
 export default function RootNavigator() {
   const { isAuthenticated, pinConfigured, checkPinStatus } = useAuthStore();
+  const loadSettings = useSettingsStore((s) => s.load);
 
   useEffect(() => {
     checkPinStatus();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) loadSettings();
+  }, [isAuthenticated]);
 
   // Still loading PIN status
   if (pinConfigured === null) {

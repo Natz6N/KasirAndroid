@@ -1,10 +1,12 @@
+import type { SQLiteDatabase } from 'expo-sqlite';
+
 export function getLocalISO(): string {
   return new Date()
     .toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' })
     .replace(' ', 'T') + '+07:00';
 }
 
-export async function generateInvoiceNumber(db: any): Promise<string> {
+export async function generateInvoiceNumber(db: SQLiteDatabase): Promise<string> {
   const dateStr = new Date()
     .toLocaleDateString('id-ID', {
       timeZone: 'Asia/Jakarta',

@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { formatRupiah } from '../utils/formatCurrency';
 import { formatDisplayDateTime } from '../utils/dateHelper';
+import { printService } from '../services/printService';
 import type { CartItem, PaymentMethod } from '../types/database';
 
 interface InvoiceReceiptProps {
@@ -23,8 +26,11 @@ interface InvoiceReceiptProps {
   paymentAmount: number;
   changeAmount: number;
   storeName: string;
+  storeAddress?: string | null;
+  storePhone?: string | null;
   receiptNote?: string | null;
   onClose: () => void;
+  onNewTransaction?: () => void;
 }
 
 const METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -45,15 +51,59 @@ export default function InvoiceReceipt({
   paymentAmount,
   changeAmount,
   storeName,
+  storeAddress,
+  storePhone,
   receiptNote,
   onClose,
+  onNewTransaction,
 }: InvoiceReceiptProps) {
+  const [sharing, setSharing] = useState(false);
+
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      await printService.shareReceiptAsPDF({
+        invoiceNumber,
+        transactionDate: new Date().toISOString(),
+        items,
+        subtotal,
+        discountAmount,
+        totalAmount,
+        paymentMethod,
+        paymentAmount,
+        changeAmount,
+        storeName,
+        storeAddress,
+        storePhone,
+        receiptNote,
+      });
+    } catch {
+      Alert.alert('Gagal', 'Tidak dapat membagikan struk.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleNewTransaction = () => {
+    onNewTransaction?.();
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent>
       <View style={styles.overlay}>
         <View style={styles.card}>
+          {/* Success indicator */}
+          <View style={styles.successBadge}>
+            <Ionicons name="checkmark-circle" size={28} color="#22C55E" />
+            <Text style={styles.successText}>Transaksi Berhasil!</Text>
+          </View>
+
           {/* Header */}
           <Text style={styles.storeName}>{storeName}</Text>
+          {storeAddress ? <Text style={styles.storeMeta}>{storeAddress}</Text> : null}
+          {storePhone ? <Text style={styles.storeMeta}>Telp: {storePhone}</Text> : null}
           <Text style={styles.invoiceNo}>{invoiceNumber}</Text>
           <Text style={styles.dateTime}>{formatDisplayDateTime(new Date().toISOString())}</Text>
 
@@ -66,7 +116,7 @@ export default function InvoiceReceipt({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemName}>{item.product.name}</Text>
                   <Text style={styles.itemQty}>
-                    {item.quantity} × {formatRupiah(item.product.sell_price)}
+                    {item.quantity} x {formatRupiah(item.product.sell_price)}
                   </Text>
                 </View>
                 <Text style={styles.itemSubtotal}>{formatRupiah(item.subtotal)}</Text>
@@ -113,10 +163,48 @@ export default function InvoiceReceipt({
             </>
           )}
 
-          <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-            <Text style={styles.closeBtnText}>Selesai</Text>
+          <View style={styles.divider} />
+
+          {/* Share button */}
+          <TouchableOpacity
+            style={[styles.shareBtn, sharing && styles.btnDisabled]}
+            onPress={handleShare}
+            disabled={sharing}
+            activeOpacity={0.8}
+          >
+            {sharing ? (
+              <ActivityIndicator color="#6366F1" size="small" />
+            ) : (
+              <Ionicons name="share-social-outline" size={20} color="#6366F1" />
+            )}
+            <Text style={styles.shareBtnText}>
+              {sharing ? 'Menyiapkan PDF...' : 'Bagikan Struk'}
+            </Text>
           </TouchableOpacity>
+
+          {/* Bottom action buttons */}
+          <View style={styles.bottomRow}>
+            {onNewTransaction ? (
+              <>
+                <TouchableOpacity
+                  style={styles.newTxBtn}
+                  onPress={handleNewTransaction}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle-outline" size={20} color="#fff" />
+                  <Text style={styles.newTxBtnText}>Transaksi Baru</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.8}>
+                  <Text style={styles.doneBtnText}>Selesai</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity style={styles.newTxBtn} onPress={onClose} activeOpacity={0.8}>
+                <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                <Text style={styles.newTxBtnText}>Selesai</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -126,33 +214,110 @@ export default function InvoiceReceipt({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   card: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
-    maxHeight: '85%',
+    paddingBottom: 28,
+    maxHeight: '90%',
   },
-  storeName: { fontSize: 18, fontWeight: '700', textAlign: 'center', color: '#111827' },
-  invoiceNo: { fontSize: 12, textAlign: 'center', color: '#6B7280', marginTop: 2 },
-  dateTime: { fontSize: 12, textAlign: 'center', color: '#9CA3AF' },
-  divider: { borderBottomWidth: 1, borderColor: '#E5E7EB', marginVertical: 12 },
+  successBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
+  successText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#22C55E',
+  },
+  storeName: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    color: '#111827',
+  },
+  storeMeta: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  invoiceNo: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  dateTime: {
+    fontSize: 12,
+    textAlign: 'center',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  divider: {
+    borderBottomWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    marginVertical: 12,
+  },
   items: { maxHeight: 200 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  itemName: { fontSize: 13, fontWeight: '500', color: '#111827' },
-  itemQty: { fontSize: 11, color: '#6B7280' },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  itemName: { fontSize: 13, fontWeight: '600', color: '#111827', flex: 1, marginRight: 8 },
+  itemQty: { fontSize: 11, color: '#6B7280', marginTop: 2 },
   itemSubtotal: { fontSize: 13, fontWeight: '600', color: '#374151' },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   summaryLabel: { fontSize: 13, color: '#6B7280' },
   summaryValue: { fontSize: 13, color: '#374151' },
   totalRow: { paddingVertical: 6 },
   totalLabel: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  totalValue: { fontSize: 18, fontWeight: '700', color: '#6366F1' },
-  note: { fontSize: 12, color: '#9CA3AF', textAlign: 'center', marginBottom: 12 },
-  closeBtn: {
+  totalValue: { fontSize: 20, fontWeight: '800', color: '#6366F1' },
+  note: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#6366F1',
+    backgroundColor: '#EEF2FF',
+    marginBottom: 10,
+  },
+  btnDisabled: { opacity: 0.6 },
+  shareBtnText: {
+    color: '#6366F1',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  newTxBtn: {
+    flex: 1,
     backgroundColor: '#6366F1',
     borderRadius: 12,
     paddingVertical: 14,
@@ -160,7 +325,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    marginTop: 12,
+    elevation: 2,
   },
-  closeBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  newTxBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  doneBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBtnText: {
+    color: '#6B7280',
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });

@@ -9,7 +9,6 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Crypto from 'expo-crypto';
@@ -17,14 +16,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { BackupService } from '../../services/BackupService';
+import { getDatabase } from '../../database/db';
 
 const backupService = new BackupService();
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const { settings, load, update } = useSettingsStore();
   const lock = useAuthStore((s) => s.lock);
+  const [rebuilding, setRebuilding] = useState(false);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
   const [storePhone, setStorePhone] = useState('');
@@ -81,6 +81,43 @@ export default function SettingsScreen() {
     await update({ admin_pin: newHashed });
     setOldPin(''); setNewPin(''); setConfirmPin('');
     Alert.alert('Berhasil', 'PIN berhasil diubah');
+  };
+
+  const handleRebuildStock = async () => {
+    Alert.alert(
+      'Rebuild Stok',
+      'Ini akan menghitung ulang semua stok dari riwayat pergerakan stok. Lanjutkan?',
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Rebuild',
+          onPress: async () => {
+            setRebuilding(true);
+            try {
+              const db = await getDatabase();
+              await db.runAsync(`
+                UPDATE products SET stock = COALESCE(
+                  (SELECT SUM(
+                    CASE 
+                      WHEN type IN ('in', 'return') THEN quantity
+                      WHEN type = 'out' THEN -quantity
+                      WHEN type = 'adjustment' THEN (stock_after - stock_before)
+                      ELSE 0
+                    END
+                  ) FROM stock_movements WHERE product_id = products.id),
+                  0
+                ), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+              `);
+              Alert.alert('Berhasil', 'Stok berhasil dihitung ulang dari riwayat');
+            } catch {
+              Alert.alert('Gagal', 'Tidak dapat rebuild stok');
+            } finally {
+              setRebuilding(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleBackup = async () => {
@@ -142,11 +179,11 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ width: 32 }} />
         <Text style={styles.headerTitle}>Pengaturan</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity onPress={lock} style={styles.lockBtn}>
+          <Ionicons name="lock-closed-outline" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.body}>
@@ -190,6 +227,26 @@ export default function SettingsScreen() {
           </Field>
           <TouchableOpacity style={styles.btn} onPress={handleChangePin}>
             <Text style={styles.btnText}>Ubah PIN</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Recovery */}
+        <Text style={styles.sectionTitle}>Pemulihan Data</Text>
+        <View style={styles.card}>
+          <Text style={styles.backupNote}>
+            Jika stok tidak sesuai kenyataan, gunakan ini untuk menghitung ulang dari riwayat pergerakan stok.
+          </Text>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#8B5CF6' }, rebuilding && { opacity: 0.6 }]}
+            onPress={handleRebuildStock}
+            disabled={rebuilding}
+          >
+            {rebuilding ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="refresh-outline" size={18} color="#fff" />
+                <Text style={styles.btnText}>Rebuild Stok dari Riwayat</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -260,4 +317,5 @@ const styles = StyleSheet.create({
   },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   backupNote: { fontSize: 13, color: '#6B7280', marginBottom: 12, lineHeight: 18 },
+  lockBtn: { padding: 6, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20 },
 });

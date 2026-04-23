@@ -148,6 +148,15 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       ALTER TABLE app_settings ADD COLUMN pin_configured   INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 3,
+    sql: `
+      UPDATE app_settings
+      SET pin_configured = 0
+      WHERE id = 1
+        AND admin_pin = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
+    `,
+  },
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {

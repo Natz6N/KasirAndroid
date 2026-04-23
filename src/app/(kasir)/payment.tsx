@@ -156,11 +156,11 @@ export default function PaymentScreen() {
           <View style={styles.cashSection}>
             <Text style={styles.sectionTitle}>Uang Diterima</Text>
             <View style={styles.amountDisplay}>
-              <Text style={[styles.amountText, payInput ? {color: COLORS.text} : {color: COLORS.textSecondary}]}>
+              <Text style={[styles.amountText, payInput ? { color: COLORS.text } : { color: COLORS.textSecondary }]}>
                 {payInput ? formatRupiah(parseInt(payInput, 10) || 0) : 'Rp 0'}
               </Text>
             </View>
-            
+
             <View style={styles.quickCash}>
               {quickAmounts.map((v) => (
                 <TouchableOpacity
@@ -219,8 +219,15 @@ export default function PaymentScreen() {
           paymentAmount={receiptData.paymentAmount}
           changeAmount={receiptData.changeAmount}
           storeName={settings?.store_name ?? 'Omah Krupuk'}
+          storeAddress={settings?.store_address ?? null}
+          storePhone={settings?.store_phone ?? null}
           receiptNote={settings?.receipt_note ?? null}
           onClose={handleReceiptClose}
+          onNewTransaction={() => {
+            setInvoiceVisible(false);
+            clear();
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' as any }] });
+          }}
         />
       )}
     </View>
@@ -255,14 +262,14 @@ const styles = StyleSheet.create({
   },
   totalLabel: { color: COLORS.primaryLight, fontSize: 14, fontWeight: '600' },
   totalAmount: { color: COLORS.surface, fontSize: 36, fontWeight: '800', marginTop: SPACING.xs },
-  discountNote: { 
-    color: COLORS.primaryLight, 
-    fontSize: 12, 
-    marginTop: SPACING.sm, 
-    backgroundColor: 'rgba(255,255,255,0.1)', 
-    paddingHorizontal: SPACING.sm, 
-    paddingVertical: 4, 
-    borderRadius: RADIUS.full 
+  discountNote: {
+    color: COLORS.primaryLight,
+    fontSize: 12,
+    marginTop: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full
   },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: -SPACING.sm },
   methodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
@@ -278,8 +285,8 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     elevation: 1,
   },
-  methodCardActive: { 
-    backgroundColor: COLORS.primaryDark, 
+  methodCardActive: {
+    backgroundColor: COLORS.primaryDark,
     borderColor: COLORS.primaryDark,
     elevation: 4,
   },
@@ -336,10 +343,10 @@ const styles = StyleSheet.create({
   changeValue: { fontSize: 18, fontWeight: '800', color: COLORS.success },
   changeNegative: { color: COLORS.danger },
   numpadContainer: { marginTop: SPACING.sm },
-  footer: { 
-    padding: SPACING.lg, 
-    backgroundColor: COLORS.surface, 
-    borderTopWidth: 1, 
+  footer: {
+    padding: SPACING.lg,
+    backgroundColor: COLORS.surface,
+    borderTopWidth: 1,
     borderTopColor: COLORS.border,
     elevation: 16,
     shadowColor: '#000',
