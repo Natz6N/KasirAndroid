@@ -13,13 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { TransactionService, StockInsufficientError } from '../../services/TransactionService';
 import { useCartStore } from '../../stores/cartStore';
-import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { formatRupiah } from '../../utils/formatCurrency';
 import NumberPad from '../../components/NumberPad';
 import InvoiceReceipt from '../../components/InvoiceReceipt';
+import { COLORS, RADIUS, SPACING } from '../../theme/colors';
 import type { CartItem, PaymentMethod } from '../../types/database';
 import type { RootStackParamList } from '../../types/navigation';
 
@@ -45,8 +45,6 @@ export default function PaymentScreen() {
     }))
   );
   const settings = useSettingsStore((s) => s.settings);
-  const mode = useAuthStore((s) => s.mode);
-
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [payInput, setPayInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -102,8 +100,7 @@ export default function PaymentScreen() {
   const handleReceiptClose = () => {
     setInvoiceVisible(false);
     clear();
-    const targetScreen = mode === 'admin' ? 'AdminTabs' : 'KasirTabs';
-    navigation.reset({ index: 0, routes: [{ name: targetScreen }] });
+    navigation.reset({ index: 0, routes: [{ name: 'MainTabs' as any }] });
   };
 
   const quickAmounts = [
@@ -115,9 +112,9 @@ export default function PaymentScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.headerBtn}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.surface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pembayaran</Text>
         <View style={{ width: 24 }} />
@@ -128,7 +125,7 @@ export default function PaymentScreen() {
           <Text style={styles.totalLabel}>Total Pembayaran</Text>
           <Text style={styles.totalAmount}>{formatRupiah(total)}</Text>
           {discountAmount > 0 && (
-            <Text style={styles.discountNote}>Diskon: {formatRupiah(discountAmount)}</Text>
+            <Text style={styles.discountNote}>Diskon Transaksi: {formatRupiah(discountAmount)}</Text>
           )}
         </View>
 
@@ -139,12 +136,15 @@ export default function PaymentScreen() {
               key={m.key}
               style={[styles.methodCard, method === m.key && styles.methodCardActive]}
               onPress={() => setMethod(m.key)}
+              activeOpacity={0.8}
             >
-              <Ionicons
-                name={m.icon as any}
-                size={24}
-                color={method === m.key ? '#fff' : '#6366F1'}
-              />
+              <View style={[styles.iconWrapper, method === m.key && styles.iconWrapperActive]}>
+                <Ionicons
+                  name={m.icon as any}
+                  size={22}
+                  color={method === m.key ? COLORS.primary : COLORS.textSecondary}
+                />
+              </View>
               <Text style={[styles.methodLabel, method === m.key && styles.methodLabelActive]}>
                 {m.label}
               </Text>
@@ -156,18 +156,11 @@ export default function PaymentScreen() {
           <View style={styles.cashSection}>
             <Text style={styles.sectionTitle}>Uang Diterima</Text>
             <View style={styles.amountDisplay}>
-              <Text style={styles.amountText}>
+              <Text style={[styles.amountText, payInput ? {color: COLORS.text} : {color: COLORS.textSecondary}]}>
                 {payInput ? formatRupiah(parseInt(payInput, 10) || 0) : 'Rp 0'}
               </Text>
             </View>
-            {payAmount > 0 && (
-              <View style={[styles.changeRow, change < 0 && styles.changeRowNegative]}>
-                <Text style={styles.changeLabel}>Kembalian</Text>
-                <Text style={[styles.changeValue, change < 0 && styles.changeNegative]}>
-                  {formatRupiah(Math.max(0, change))}
-                </Text>
-              </View>
-            )}
+            
             <View style={styles.quickCash}>
               {quickAmounts.map((v) => (
                 <TouchableOpacity
@@ -179,22 +172,35 @@ export default function PaymentScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <NumberPad value={payInput} onChange={setPayInput} />
+
+            {payAmount > 0 && (
+              <View style={[styles.changeRow, change < 0 && styles.changeRowNegative]}>
+                <Text style={styles.changeLabel}>{change < 0 ? 'Kurang' : 'Kembalian'}</Text>
+                <Text style={[styles.changeValue, change < 0 && styles.changeNegative]}>
+                  {formatRupiah(Math.abs(change))}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.numpadContainer}>
+              <NumberPad value={payInput} onChange={setPayInput} />
+            </View>
           </View>
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
         <TouchableOpacity
           style={[styles.confirmBtn, (!canConfirm || loading) && styles.confirmBtnDisabled]}
           onPress={handleConfirm}
           disabled={!canConfirm || loading}
+          activeOpacity={0.8}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={COLORS.surface} />
           ) : (
             <>
-              <Ionicons name="checkmark-circle-outline" size={22} color="#fff" />
+              <Ionicons name="checkmark-circle-outline" size={24} color={COLORS.surface} />
               <Text style={styles.confirmText}>Konfirmasi Bayar</Text>
             </>
           )}
@@ -222,83 +228,135 @@ export default function PaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.lg,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  body: { padding: 16, gap: 16, paddingBottom: 24 },
+  headerBtn: { padding: SPACING.sm },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.surface },
+  body: { padding: SPACING.lg, gap: SPACING.lg, paddingBottom: 40 },
   totalCard: {
-    backgroundColor: '#6366F1',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
     alignItems: 'center',
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  totalLabel: { color: '#C7D2FE', fontSize: 14 },
-  totalAmount: { color: '#fff', fontSize: 32, fontWeight: '700', marginTop: 4 },
-  discountNote: { color: '#C7D2FE', fontSize: 12, marginTop: 4 },
-  sectionTitle: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  methodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  totalLabel: { color: COLORS.primaryLight, fontSize: 14, fontWeight: '600' },
+  totalAmount: { color: COLORS.surface, fontSize: 36, fontWeight: '800', marginTop: SPACING.xs },
+  discountNote: { 
+    color: COLORS.primaryLight, 
+    fontSize: 12, 
+    marginTop: SPACING.sm, 
+    backgroundColor: 'rgba(255,255,255,0.1)', 
+    paddingHorizontal: SPACING.sm, 
+    paddingVertical: 4, 
+    borderRadius: RADIUS.full 
+  },
+  sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: -SPACING.sm },
+  methodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   methodCard: {
     flex: 1,
     minWidth: '22%',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    paddingVertical: 14,
-    gap: 6,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+    elevation: 1,
   },
-  methodCardActive: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
-  methodLabel: { fontSize: 12, color: '#374151', fontWeight: '500' },
-  methodLabelActive: { color: '#fff' },
-  cashSection: { gap: 10 },
+  methodCardActive: { 
+    backgroundColor: COLORS.primaryDark, 
+    borderColor: COLORS.primaryDark,
+    elevation: 4,
+  },
+  iconWrapper: {
+    backgroundColor: COLORS.background,
+    width: 40,
+    height: 40,
+    borderRadius: RADIUS.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconWrapperActive: {
+    backgroundColor: COLORS.surface,
+  },
+  methodLabel: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
+  methodLabelActive: { color: COLORS.surface },
+  cashSection: { gap: SPACING.md, marginTop: SPACING.xs },
   amountDisplay: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
     borderWidth: 2,
-    borderColor: '#6366F1',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
     alignItems: 'flex-end',
+    elevation: 2,
   },
-  amountText: { fontSize: 24, fontWeight: '700', color: '#111827' },
+  amountText: { fontSize: 28, fontWeight: '800' },
+  quickCash: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  quickBtn: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    flex: 1,
+    minWidth: '22%',
+    alignItems: 'center',
+  },
+  quickBtnText: { color: COLORS.primary, fontSize: 13, fontWeight: '700' },
   changeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#F0FDF4',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.success,
+    elevation: 1,
   },
-  changeRowNegative: { backgroundColor: '#FEF2F2' },
-  changeLabel: { fontSize: 14, color: '#374151' },
-  changeValue: { fontSize: 16, fontWeight: '700', color: '#22C55E' },
-  changeNegative: { color: '#EF4444' },
-  quickCash: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  quickBtn: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  changeRowNegative: { borderLeftColor: COLORS.danger },
+  changeLabel: { fontSize: 15, color: COLORS.textSecondary, fontWeight: '600' },
+  changeValue: { fontSize: 18, fontWeight: '800', color: COLORS.success },
+  changeNegative: { color: COLORS.danger },
+  numpadContainer: { marginTop: SPACING.sm },
+  footer: { 
+    padding: SPACING.lg, 
+    backgroundColor: COLORS.surface, 
+    borderTopWidth: 1, 
+    borderTopColor: COLORS.border,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
   },
-  quickBtnText: { color: '#6366F1', fontSize: 13, fontWeight: '600' },
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#E5E7EB' },
   confirmBtn: {
-    backgroundColor: '#6366F1',
-    borderRadius: 14,
-    paddingVertical: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.lg,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
+    elevation: 4,
   },
-  confirmBtnDisabled: { backgroundColor: '#A5B4FC' },
-  confirmText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  confirmBtnDisabled: { backgroundColor: COLORS.primaryLight, elevation: 0 },
+  confirmText: { color: COLORS.surface, fontSize: 16, fontWeight: '700' },
 });

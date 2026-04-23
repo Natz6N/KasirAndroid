@@ -8,10 +8,11 @@ interface StockBadgeProps {
 }
 
 export default function StockBadge({ stock, minStock, unit }: StockBadgeProps) {
-  const status = stock === 0 ? 'empty' : stock <= minStock ? 'low' : 'ok';
+  const isEmpty = stock === 0;
+  const isLow = !isEmpty && stock <= minStock;
   return (
-    <View style={[styles.badge, styles[status]]}>
-      <Text style={[styles.text, styles[`${status}Text` as keyof typeof styles] as any]}>
+    <View style={[styles.badge, isEmpty ? styles.empty : isLow ? styles.low : styles.ok]}>
+      <Text style={[styles.text, isEmpty ? styles.emptyText : isLow ? styles.lowText : styles.okText]}>
         {stock} {unit}
       </Text>
     </View>

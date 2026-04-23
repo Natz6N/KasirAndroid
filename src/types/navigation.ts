@@ -1,22 +1,21 @@
 export type RootStackParamList = {
-  KasirTabs: undefined;
+  MainTabs: undefined;
   Cart: undefined;
   Payment: undefined;
-  AdminPIN: undefined;
-  AdminTabs: undefined;
   ProductForm: { productId?: number };
   SalesReport: undefined;
   ProfitReport: undefined;
   StockReport: undefined;
-};
-
-export type KasirTabParamList = {
-  POS: undefined;
-};
-
-export type AdminTabParamList = {
-  Dashboard: undefined;
-  Products: undefined;
+  Transactions: undefined;
+  StockManagement: undefined;
+  StockHistory: { productId: number; productName: string };
   Categories: undefined;
-  Settings: undefined;
+  Expenses: undefined;
+};
+
+export type MainTabParamList = {
+  Kasir: undefined;
+  Produk: undefined;
+  Dashboard: undefined;
+  Lainnya: undefined;
 };

@@ -46,31 +46,73 @@ export class TransactionRepository {
     );
   }
 
-  async cancel(id: number): Promise<void> {
+  async voidTransaction(id: number, reason?: string): Promise<void> {
     const db = await getDatabase();
     await db.withTransactionAsync(async () => {
-      const items = await db.getAllAsync<{ id: number; product_id: number | null }>(
-        'SELECT id, product_id FROM transaction_items WHERE transaction_id = ?',
+      // Verify transaction exists and is completed
+      const tx = await db.getFirstAsync<{ status: string }>(
+        'SELECT status FROM transactions WHERE id = ?',
         [id]
       );
+      if (!tx) throw new Error('Transaksi tidak ditemukan');
+      if (tx.status !== 'completed') throw new Error('Hanya transaksi selesai yang bisa di-void');
+
+      // Get all items and reverse stock
+      const items = await db.getAllAsync<{
+        id: number;
+        product_id: number | null;
+        quantity: number;
+      }>(
+        'SELECT id, product_id, quantity FROM transaction_items WHERE transaction_id = ?',
+        [id]
+      );
+
       for (const item of items) {
         if (item.product_id == null) continue;
-        const mv = await db.getFirstAsync<{ stock_before: number }>(
-          'SELECT stock_before FROM stock_movements WHERE transaction_item_id = ? ORDER BY id DESC LIMIT 1',
-          [item.id]
+
+        const current = await db.getFirstAsync<{ stock: number }>(
+          'SELECT stock FROM products WHERE id = ?',
+          [item.product_id]
         );
-        if (mv) {
-          await db.runAsync(
-            "UPDATE products SET stock = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
-            [mv.stock_before, item.product_id]
-          );
-        }
+        if (!current) continue;
+
+        const stockBefore = current.stock;
+        const stockAfter = stockBefore + item.quantity;
+
+        // Restore stock
+        await db.runAsync(
+          "UPDATE products SET stock = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
+          [stockAfter, item.product_id]
+        );
+
+        // Insert return movement for audit trail
+        await db.runAsync(
+          `INSERT INTO stock_movements
+           (product_id, transaction_item_id, type, quantity, stock_before, stock_after, note)
+           VALUES (?,?,?,?,?,?,?)`,
+          [
+            item.product_id,
+            item.id,
+            'return',
+            item.quantity,
+            stockBefore,
+            stockAfter,
+            reason || 'Void transaksi',
+          ]
+        );
       }
+
+      // Mark transaction as cancelled
       await db.runAsync(
-        "UPDATE transactions SET status = 'cancelled' WHERE id = ?",
-        [id]
+        "UPDATE transactions SET status = 'cancelled', note = ? WHERE id = ?",
+        [reason || 'Void transaksi', id]
       );
     });
+  }
+
+  /** @deprecated Use voidTransaction instead */
+  async cancel(id: number): Promise<void> {
+    return this.voidTransaction(id);
   }
 
   async getDailySummary(startDate: string, endDate: string) {

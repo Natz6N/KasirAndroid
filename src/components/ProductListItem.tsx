@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatRupiah } from '../utils/formatCurrency';
 import StockBadge from './StockBadge';
+import { COLORS, RADIUS, SPACING } from '../theme/colors';
 import type { Product } from '../types/database';
 
 interface ProductListItemProps {
@@ -13,7 +14,7 @@ interface ProductListItemProps {
 
 export default function ProductListItem({ product, onEdit, onDelete }: ProductListItemProps) {
   return (
-    <View style={styles.row}>
+    <View style={styles.card}>
       <View style={styles.info}>
         <Text style={styles.name}>{product.name}</Text>
         <Text style={styles.meta}>
@@ -21,7 +22,9 @@ export default function ProductListItem({ product, onEdit, onDelete }: ProductLi
         </Text>
         <View style={styles.priceRow}>
           <Text style={styles.sellPrice}>{formatRupiah(product.sell_price)}</Text>
-          <Text style={styles.buyPrice}>HPP: {formatRupiah(product.buy_price)}</Text>
+          <View style={styles.buyPriceBadge}>
+            <Text style={styles.buyPrice}>HPP: {formatRupiah(product.buy_price)}</Text>
+          </View>
         </View>
       </View>
       <View style={styles.right}>
@@ -31,11 +34,11 @@ export default function ProductListItem({ product, onEdit, onDelete }: ProductLi
           unit={product.unit}
         />
         <View style={styles.actions}>
-          <TouchableOpacity onPress={() => onEdit(product)} hitSlop={8}>
-            <Ionicons name="create-outline" size={20} color="#6366F1" />
+          <TouchableOpacity onPress={() => onEdit(product)} hitSlop={12} style={styles.actionBtn}>
+            <Ionicons name="create" size={18} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => onDelete(product)} hitSlop={8}>
-            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+          <TouchableOpacity onPress={() => onDelete(product)} hitSlop={12} style={[styles.actionBtn, { backgroundColor: '#FEE2E2' }]}>
+            <Ionicons name="trash" size={18} color={COLORS.danger} />
           </TouchableOpacity>
         </View>
       </View>
@@ -44,21 +47,41 @@ export default function ProductListItem({ product, onEdit, onDelete }: ProductLi
 }
 
 const styles = StyleSheet.create({
-  row: {
+  card: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    elevation: 1,
-    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    elevation: 2,
+    shadowColor: COLORS.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    gap: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
   info: { flex: 1 },
-  name: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  meta: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
-  priceRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  sellPrice: { fontSize: 14, fontWeight: '700', color: '#6366F1' },
-  buyPrice: { fontSize: 12, color: '#6B7280' },
-  right: { alignItems: 'flex-end', justifyContent: 'space-between' },
-  actions: { flexDirection: 'row', gap: 14, marginTop: 4 },
+  name: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  meta: { fontSize: 11, color: COLORS.textSecondary, marginBottom: SPACING.sm },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  sellPrice: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  buyPriceBadge: {
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  buyPrice: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '600' },
+  right: { alignItems: 'flex-end', justifyContent: 'space-between', paddingVertical: 2 },
+  actions: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm },
+  actionBtn: {
+    backgroundColor: COLORS.primaryLight + '40', // slightly transparent
+    width: 32,
+    height: 32,
+    borderRadius: RADIUS.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });

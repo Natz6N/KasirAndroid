@@ -1,11 +1,14 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { closeDatabase, resetDatabase } from '../database/db';
 
 const DB_PATH = `${FileSystem.documentDirectory}SQLite/omah_krupuk.db`;
 
 export class BackupService {
   async createBackup(): Promise<string> {
-    const dest = `${FileSystem.documentDirectory}backup_${Date.now()}.db`;
+    const now = new Date();
+    const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const dest = `${FileSystem.documentDirectory}backup_${dateStr}.db`;
     await FileSystem.copyAsync({ from: DB_PATH, to: dest });
     return dest;
   }
@@ -13,6 +16,38 @@ export class BackupService {
   async shareBackup(): Promise<void> {
     const dest = await this.createBackup();
     await Sharing.shareAsync(dest, { mimeType: 'application/octet-stream' });
+  }
+
+  async restoreFromFile(sourceUri: string): Promise<void> {
+    // Validate: check source file exists
+    const info = await FileSystem.getInfoAsync(sourceUri);
+    if (!info.exists) throw new Error('File backup tidak ditemukan');
+
+    // Close current database connection
+    await closeDatabase();
+
+    // Ensure SQLite directory exists
+    const sqliteDir = `${FileSystem.documentDirectory}SQLite/`;
+    const dirInfo = await FileSystem.getInfoAsync(sqliteDir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(sqliteDir, { intermediates: true });
+    }
+
+    // Copy backup file over current database
+    await FileSystem.copyAsync({ from: sourceUri, to: DB_PATH });
+
+    // Also remove WAL and SHM files if they exist (clean slate)
+    const walPath = `${DB_PATH}-wal`;
+    const shmPath = `${DB_PATH}-shm`;
+    try {
+      await FileSystem.deleteAsync(walPath, { idempotent: true });
+      await FileSystem.deleteAsync(shmPath, { idempotent: true });
+    } catch {
+      // Ignore errors — files may not exist
+    }
+
+    // Reopen database with fresh connection
+    await resetDatabase();
   }
 
   async listBackups(): Promise<FileSystem.FileInfo[]> {

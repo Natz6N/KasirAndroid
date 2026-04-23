@@ -90,6 +90,8 @@ export interface AppSettings {
   tax_percent: number;
   receipt_note: string | null;
   low_stock_threshold: number;
+  autolock_minutes: number;
+  pin_configured: 0 | 1;
 }
 
 export interface CartItem {
@@ -111,6 +113,17 @@ export interface CheckoutPayload {
 export interface ProductInput extends Partial<Product> {
   name: string;
   sell_price: number;
+}
+
+export type ExpenseCategory = 'listrik' | 'sewa' | 'gaji' | 'restock' | 'transport' | 'lain';
+
+export interface Expense {
+  id: number;
+  date: string;
+  category: ExpenseCategory;
+  amount: number;
+  note: string | null;
+  created_at: string;
 }
 
 export interface DailySalesRow {

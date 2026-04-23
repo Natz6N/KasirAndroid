@@ -130,6 +130,24 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE        INDEX IF NOT EXISTS idx_stock_product      ON stock_movements(product_id, created_at);
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS expenses (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        date        TEXT    NOT NULL,
+        category    TEXT    NOT NULL CHECK(category IN ('listrik','sewa','gaji','restock','transport','lain')),
+        amount      INTEGER NOT NULL CHECK(amount > 0),
+        note        TEXT,
+        created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_expenses_date     ON expenses(date);
+      CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+
+      ALTER TABLE app_settings ADD COLUMN autolock_minutes INTEGER NOT NULL DEFAULT 5;
+      ALTER TABLE app_settings ADD COLUMN pin_configured   INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];
 
 async function runMigrations(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -194,4 +212,24 @@ export async function recoverPendingTransactions(): Promise<void> {
       );
     });
   }
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (_db) {
+    await _db.closeAsync();
+    _db = null;
+  }
+}
+
+export async function resetDatabase(): Promise<SQLite.SQLiteDatabase> {
+  await closeDatabase();
+  return getDatabase();
+}
+
+export async function isPinConfigured(): Promise<boolean> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ pin_configured: number }>(
+    'SELECT pin_configured FROM app_settings WHERE id = 1'
+  );
+  return row?.pin_configured === 1;
 }

@@ -13,7 +13,9 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Crypto from 'expo-crypto';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useAuthStore } from '../../stores/authStore';
 import { BackupService } from '../../services/BackupService';
 
 const backupService = new BackupService();
@@ -22,16 +24,19 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { settings, load, update } = useSettingsStore();
+  const lock = useAuthStore((s) => s.lock);
   const [storeName, setStoreName] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
   const [storePhone, setStorePhone] = useState('');
   const [receiptNote, setReceiptNote] = useState('');
   const [lowStockThreshold, setLowStockThreshold] = useState('');
+  const [autolockMinutes, setAutolockMinutes] = useState('');
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [saving, setSaving] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     load();
@@ -44,6 +49,7 @@ export default function SettingsScreen() {
       setStorePhone(settings.store_phone ?? '');
       setReceiptNote(settings.receipt_note ?? '');
       setLowStockThreshold(String(settings.low_stock_threshold));
+      setAutolockMinutes(String(settings.autolock_minutes ?? 5));
     }
   }, [settings]);
 
@@ -56,6 +62,7 @@ export default function SettingsScreen() {
         store_phone: storePhone.trim() || null,
         receipt_note: receiptNote.trim() || null,
         low_stock_threshold: parseInt(lowStockThreshold, 10) || 5,
+        autolock_minutes: parseInt(autolockMinutes, 10) || 5,
       });
       Alert.alert('Berhasil', 'Pengaturan disimpan');
     } finally {
@@ -84,6 +91,51 @@ export default function SettingsScreen() {
       Alert.alert('Gagal', 'Tidak dapat membuat backup');
     } finally {
       setBackingUp(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/octet-stream',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+
+      if (!file.name?.endsWith('.db')) {
+        Alert.alert('Error', 'File harus berformat .db');
+        return;
+      }
+
+      Alert.alert(
+        'Restore Database',
+        'PERINGATAN: Semua data saat ini akan ditimpa dengan data dari backup. Yakin lanjutkan?',
+        [
+          { text: 'Batal', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: async () => {
+              setRestoring(true);
+              try {
+                await backupService.restoreFromFile(file.uri);
+                await load();
+                Alert.alert('Berhasil', 'Database berhasil di-restore. Aplikasi akan dikunci.', [
+                  { text: 'OK', onPress: () => lock() },
+                ]);
+              } catch (e: any) {
+                Alert.alert('Gagal', e.message ?? 'Tidak dapat restore database');
+              } finally {
+                setRestoring(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch {
+      Alert.alert('Gagal', 'Tidak dapat memilih file');
     }
   };
 
@@ -116,13 +168,16 @@ export default function SettingsScreen() {
           <Field label="Batas Stok Rendah">
             <TextInput style={styles.input} value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="numeric" placeholder="5" />
           </Field>
+          <Field label="Auto-lock (menit)">
+            <TextInput style={styles.input} value={autolockMinutes} onChangeText={setAutolockMinutes} keyboardType="numeric" placeholder="5" />
+          </Field>
           <TouchableOpacity style={[styles.btn, saving && { opacity: 0.6 }]} onPress={handleSaveStore} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Simpan</Text>}
           </TouchableOpacity>
         </View>
 
         {/* Change PIN */}
-        <Text style={styles.sectionTitle}>Ubah PIN Admin</Text>
+        <Text style={styles.sectionTitle}>Ubah PIN</Text>
         <View style={styles.card}>
           <Field label="PIN Lama">
             <TextInput style={styles.input} value={oldPin} onChangeText={setOldPin} secureTextEntry keyboardType="numeric" maxLength={6} placeholder="••••••" />
@@ -138,17 +193,34 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Backup */}
-        <Text style={styles.sectionTitle}>Backup Data</Text>
+        {/* Backup & Restore */}
+        <Text style={styles.sectionTitle}>Backup & Restore</Text>
         <View style={styles.card}>
           <Text style={styles.backupNote}>
-            Backup akan membuat salinan database dan memungkinkan Anda menyimpan atau mengirimnya.
+            Backup akan membuat salinan database. Restore akan menimpa semua data saat ini.
           </Text>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: '#10B981' }, backingUp && { opacity: 0.6 }]} onPress={handleBackup} disabled={backingUp}>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#10B981' }, backingUp && { opacity: 0.6 }]}
+            onPress={handleBackup}
+            disabled={backingUp}
+          >
             {backingUp ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
                 <Text style={styles.btnText}>Backup Sekarang</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#F59E0B', marginTop: 8 }, restoring && { opacity: 0.6 }]}
+            onPress={handleRestore}
+            disabled={restoring}
+          >
+            {restoring ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="cloud-download-outline" size={18} color="#fff" />
+                <Text style={styles.btnText}>Restore dari File</Text>
               </>
             )}
           </TouchableOpacity>
@@ -174,7 +246,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#6366F1', paddingHorizontal: 16, paddingBottom: 12,
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  body: { padding: 16, gap: 10 },
+  body: { padding: 16, gap: 10, paddingBottom: 40 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#374151', marginTop: 8 },
   card: { backgroundColor: '#fff', borderRadius: 14, padding: 16, elevation: 1 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#374151' },

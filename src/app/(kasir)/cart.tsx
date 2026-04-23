@@ -17,6 +17,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { formatRupiah } from '../../utils/formatCurrency';
 import CartItemCard from '../../components/CartItemCard';
 import EmptyState from '../../components/EmptyState';
+import { COLORS, SPACING, RADIUS } from '../../theme/colors';
 import type { CartItem } from '../../types/database';
 import type { RootStackParamList } from '../../types/navigation';
 
@@ -61,13 +62,14 @@ export default function CartScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + SPACING.md }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.headerBtn}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.surface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Keranjang ({items.length})</Text>
-        <TouchableOpacity onPress={handleClear} disabled={items.length === 0} hitSlop={8}>
-          <Ionicons name="trash-outline" size={22} color="#fff" />
+        <TouchableOpacity onPress={handleClear} disabled={items.length === 0} hitSlop={8} style={[styles.headerBtn, items.length === 0 && { opacity: 0.5 }]}>
+          <Ionicons name="trash-outline" size={22} color={COLORS.surface} />
         </TouchableOpacity>
       </View>
 
@@ -92,21 +94,26 @@ export default function CartScreen() {
       />
 
       {items.length > 0 && (
-        <View style={styles.summary}>
+        <View style={[styles.summary, { paddingBottom: insets.bottom + SPACING.lg }]}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
             <Text style={styles.summaryValue}>{formatRupiah(subtotal())}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Diskon Transaksi</Text>
-            <TextInput
-              style={styles.discountInput}
-              value={discountInput}
-              onChangeText={handleDiscountChange}
-              keyboardType="numeric"
-              placeholder="0"
-            />
+            <View style={styles.discountInputWrapper}>
+              <Text style={styles.discountPrefix}>Rp</Text>
+              <TextInput
+                style={styles.discountInput}
+                value={discountInput}
+                onChangeText={handleDiscountChange}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={COLORS.textSecondary}
+              />
+            </View>
           </View>
+          <View style={styles.divider} />
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatRupiah(totalAmount())}</Text>
@@ -114,9 +121,10 @@ export default function CartScreen() {
           <TouchableOpacity
             style={styles.checkoutBtn}
             onPress={() => navigation.navigate('Payment')}
+            activeOpacity={0.9}
           >
             <Text style={styles.checkoutText}>Lanjut Pembayaran</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={20} color={COLORS.surface} />
           </TouchableOpacity>
         </View>
       )}
@@ -125,59 +133,84 @@ export default function CartScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 16,
-    paddingTop: 48,
-    paddingBottom: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.lg,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
   },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
-  list: { paddingHorizontal: 12, paddingVertical: 8 },
+  headerBtn: {
+    padding: SPACING.sm,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.surface },
+  list: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, paddingBottom: 20 },
   summary: {
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    padding: 16,
-    gap: 8,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    gap: SPACING.md,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  summaryLabel: { fontSize: 14, color: '#6B7280' },
-  summaryValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  discountInput: {
+  summaryLabel: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+  summaryValue: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  discountInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    width: 120,
+  },
+  discountPrefix: { fontSize: 14, color: COLORS.textSecondary, marginRight: 4 },
+  discountInput: {
+    flex: 1,
+    paddingVertical: 8,
     fontSize: 14,
-    minWidth: 100,
+    color: COLORS.text,
     textAlign: 'right',
+    fontWeight: '600',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: SPACING.xs,
   },
   totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingTop: 8,
-    marginTop: 4,
+    marginBottom: SPACING.sm,
   },
-  totalLabel: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  totalValue: { fontSize: 18, fontWeight: '700', color: '#6366F1' },
+  totalLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  totalValue: { fontSize: 22, fontWeight: '800', color: COLORS.primary },
   checkoutBtn: {
-    backgroundColor: '#6366F1',
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 16,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
+    gap: SPACING.sm,
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  checkoutText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  checkoutText: { color: COLORS.surface, fontSize: 16, fontWeight: '700' },
 });

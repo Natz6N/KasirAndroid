@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 18, fontWeight: '700', textAlign: 'center', color: '#111827' },
   invoiceNo: { fontSize: 12, textAlign: 'center', color: '#6B7280', marginTop: 2 },
   dateTime: { fontSize: 12, textAlign: 'center', color: '#9CA3AF' },
-  divider: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#E5E7EB', marginVertical: 12 },
+  divider: { borderBottomWidth: 1, borderColor: '#E5E7EB', marginVertical: 12 },
   items: { maxHeight: 200 },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   itemName: { fontSize: 13, fontWeight: '500', color: '#111827' },
