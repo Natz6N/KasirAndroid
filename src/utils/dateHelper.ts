@@ -6,6 +6,44 @@ export function getLocalISO(): string {
     .replace(' ', 'T') + '+07:00';
 }
 
+/**
+ * Menghasilkan date range hari ini dalam timezone WIB (UTC+7)
+ * Digunakan untuk query SQLite agar konsisten dengan format transaction_date
+ */
+export function getTodayRangeWIB(): { start: string; end: string } {
+  const now = new Date();
+  const jakartaOffset = 7 * 60; // UTC+7 dalam menit
+  const localOffset = now.getTimezoneOffset();
+  const jakartaTime = new Date(now.getTime() + (jakartaOffset + localOffset) * 60 * 1000);
+
+  const year = jakartaTime.getFullYear();
+  const month = String(jakartaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(jakartaTime.getDate()).padStart(2, '0');
+
+  return {
+    start: `${year}-${month}-${day}T00:00:00+07:00`,
+    end: `${year}-${month}-${day}T23:59:59.999+07:00`,
+  };
+}
+
+/**
+ * Menghasilkan date range untuk range arbitrary dalam timezone WIB
+ */
+export function getDateRangeWIB(date: Date): { start: string; end: string } {
+  const jakartaOffset = 7 * 60;
+  const localOffset = date.getTimezoneOffset();
+  const jakartaTime = new Date(date.getTime() + (jakartaOffset + localOffset) * 60 * 1000);
+
+  const year = jakartaTime.getFullYear();
+  const month = String(jakartaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(jakartaTime.getDate()).padStart(2, '0');
+
+  return {
+    start: `${year}-${month}-${day}T00:00:00+07:00`,
+    end: `${year}-${month}-${day}T23:59:59.999+07:00`,
+  };
+}
+
 export async function generateInvoiceNumber(db: SQLiteDatabase): Promise<string> {
   const dateStr = new Date()
     .toLocaleDateString('id-ID', {

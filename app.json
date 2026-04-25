@@ -20,7 +20,9 @@
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -30,6 +32,11 @@
           "cameraPermission": "Allow Omah Krupuk to access camera for barcode scanning."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c976c8e6-dd2b-4045-a8b5-3f92bbeb8851"
+      }
+    }
   }
 }

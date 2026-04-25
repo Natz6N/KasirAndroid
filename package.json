@@ -1,11 +1,12 @@
 {
   "name": "omah-krupuk-pos",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "apk": "eas build --platform android --profile production"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -15,7 +16,7 @@
     "@react-navigation/native": "^7.1.31",
     "@react-navigation/stack": "^7.8.10",
     "@tanstack/react-query": "^5.99.2",
-    "expo": "~55.0.17",
+    "expo": "^55.0.6",
     "expo-camera": "~55.0.16",
     "expo-crypto": "~55.0.0",
     "expo-document-picker": "~55.0.13",

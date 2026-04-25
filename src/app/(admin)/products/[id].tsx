@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,11 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ProductRepository } from '../../../repositories/ProductRepository';
 import { StockRepository } from '../../../repositories/StockRepository';
+import { CategoryRepository } from '../../../repositories/CategoryRepository';
 import { isValidBarcode } from '../../../utils/validation';
 import { useCategories } from '../../../hooks/useCategories';
 import type { RootStackParamList } from '../../../types/navigation';
 import { COLORS, RADIUS, SPACING } from '../../../theme/colors';
-import { pickProductImage, takeProductPhoto, deleteProductImage } from '../../../services/ImageService';
+import { pickProductImage, takeProductPhoto } from '../../../services/ImageService';
 
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -29,6 +31,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 const productRepo = new ProductRepository();
 const stockRepo = new StockRepository();
+const categoryRepo = new CategoryRepository();
 
 const productSchema = z.object({
   name: z.string().min(1, 'Nama wajib diisi').max(200, 'Maksimal 200 karakter'),
@@ -45,7 +48,14 @@ const productSchema = z.object({
 
 type ProductFormData = z.infer<typeof productSchema>;
 
-const UNITS = ['pcs', 'kg', 'gr', 'ltr', 'bks', 'dus', 'pak'];
+// Satuan bawaan
+const DEFAULT_UNITS = ['pcs', 'kg', 'gr', 'ltr', 'bks', 'dus', 'pak'];
+
+// Warna preset untuk kategori baru
+const PRESET_COLORS = [
+  '#6366F1', '#EC4899', '#F59E0B', '#10B981',
+  '#3B82F6', '#EF4444', '#8B5CF6', '#14B8A6',
+];
 
 export default function ProductFormScreen() {
   const insets = useSafeAreaInsets();
@@ -55,13 +65,25 @@ export default function ProductFormScreen() {
   const { productId } = route.params ?? {};
   const isEdit = !!productId;
 
-  const { data: categories = [] } = useCategories();
+  const { data: categories = [], refetch: refetchCategories } = useCategories();
   const [saving, setSaving] = useState(false);
   const [initialStock, setInitialStock] = useState<number>(0);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [originalImageUri, setOriginalImageUri] = useState<string | null>(null);
 
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm<ProductFormData>({
+  // ── State untuk satuan custom ──────────────────────────────────────────────
+  const [customUnits, setCustomUnits] = useState<string[]>([]);
+  const [showAddUnit, setShowAddUnit] = useState(false);
+  const [newUnitInput, setNewUnitInput] = useState('');
+
+  // ── State untuk kategori custom (tambah cepat) ─────────────────────────────
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState(PRESET_COLORS[0]);
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  const allUnits = [...DEFAULT_UNITS, ...customUnits];
+
+  const { control, handleSubmit, setValue, watch, formState: { errors } } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema) as any,
     defaultValues: {
       name: '',
@@ -76,6 +98,8 @@ export default function ProductFormScreen() {
       description: '',
     },
   });
+
+  const currentUnit = watch('unit');
 
   useEffect(() => {
     if (productId) {
@@ -92,9 +116,11 @@ export default function ProductFormScreen() {
         setValue('category_id', p.category_id);
         setValue('description', p.description ?? '');
         setInitialStock(p.stock);
-        if (p.image_uri) {
-          setImageUri(p.image_uri);
-          setOriginalImageUri(p.image_uri);
+        if (p.image_uri) setImageUri(p.image_uri);
+
+        // Jika unit produk tidak ada di default, tambahkan ke custom
+        if (p.unit && !DEFAULT_UNITS.includes(p.unit)) {
+          setCustomUnits((prev) => prev.includes(p.unit) ? prev : [...prev, p.unit]);
         }
       });
     }
@@ -123,6 +149,56 @@ export default function ProductFormScreen() {
       }] : []),
       { text: 'Batal', style: 'cancel' as const },
     ]);
+  };
+
+  // ── Handler tambah satuan custom ──────────────────────────────────────────
+  const handleAddUnit = () => {
+    const trimmed = newUnitInput.trim().toLowerCase();
+    if (!trimmed) {
+      Alert.alert('Error', 'Nama satuan tidak boleh kosong');
+      return;
+    }
+    if (allUnits.includes(trimmed)) {
+      Alert.alert('Info', `Satuan "${trimmed}" sudah ada`);
+      setNewUnitInput('');
+      setShowAddUnit(false);
+      return;
+    }
+    setCustomUnits((prev) => [...prev, trimmed]);
+    setValue('unit', trimmed);
+    setNewUnitInput('');
+    setShowAddUnit(false);
+  };
+
+  const handleRemoveCustomUnit = (unit: string) => {
+    setCustomUnits((prev) => prev.filter((u) => u !== unit));
+    // Jika unit yang dihapus sedang dipilih, reset ke 'pcs'
+    if (currentUnit === unit) setValue('unit', 'pcs');
+  };
+
+  // ── Handler tambah kategori baru (quick-add) ──────────────────────────────
+  const handleAddCategory = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Nama kategori tidak boleh kosong');
+      return;
+    }
+    setSavingCategory(true);
+    try {
+      const newId = await categoryRepo.upsert({
+        name: trimmed,
+        color_hex: newCategoryColor,
+      });
+      await refetchCategories();
+      setValue('category_id', newId);
+      setNewCategoryName('');
+      setNewCategoryColor(PRESET_COLORS[0]);
+      setShowAddCategory(false);
+    } catch (e: any) {
+      Alert.alert('Gagal', e.message ?? 'Gagal membuat kategori');
+    } finally {
+      setSavingCategory(false);
+    }
   };
 
   const onSubmit = async (data: ProductFormData) => {
@@ -159,11 +235,10 @@ export default function ProductFormScreen() {
         await stockRepo.addManualMovement(savedId, data.stock, 'Update stok oleh admin');
       }
 
-      // Invalidate queries to refresh lists
       queryClient.invalidateQueries({ queryKey: ['products'] });
 
       Alert.alert('Sukses', 'Produk berhasil disimpan', [
-        { text: 'OK', onPress: () => navigation.goBack() }
+        { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (e: any) {
       Alert.alert('Gagal', e.message ?? 'Terjadi kesalahan');
@@ -271,48 +346,117 @@ export default function ProductFormScreen() {
           </Field>
         </View>
 
+        {/* ── Satuan dengan Custom Input ──────────────────────────────────── */}
         <Field label="Satuan" error={errors.unit?.message}>
           <Controller
             control={control}
             name="unit"
             render={({ field: { onChange, value } }) => (
-              <View style={styles.chipRow}>
-                {UNITS.map((u) => (
+              <View style={{ gap: SPACING.sm }}>
+                <View style={styles.chipRow}>
+                  {allUnits.map((u) => (
+                    <View key={u} style={styles.chipWrapper}>
+                      <TouchableOpacity
+                        style={[styles.chip, value === u && styles.chipActive]}
+                        onPress={() => onChange(u)}
+                      >
+                        <Text style={[styles.chipText, value === u && styles.chipTextActive]}>{u}</Text>
+                      </TouchableOpacity>
+                      {/* Tombol hapus untuk satuan custom */}
+                      {customUnits.includes(u) && (
+                        <TouchableOpacity
+                          style={styles.removeChipBtn}
+                          onPress={() => handleRemoveCustomUnit(u)}
+                          hitSlop={4}
+                        >
+                          <Ionicons name="close-circle" size={14} color={COLORS.danger} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+
+                  {/* Tombol tambah satuan custom */}
                   <TouchableOpacity
-                    key={u}
-                    style={[styles.chip, value === u && styles.chipActive]}
-                    onPress={() => onChange(u)}
+                    style={styles.addChipBtn}
+                    onPress={() => setShowAddUnit(true)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.chipText, value === u && styles.chipTextActive]}>{u}</Text>
+                    <Ionicons name="add" size={16} color={COLORS.primary} />
+                    <Text style={styles.addChipText}>Custom</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
+
+                {/* Input tambah satuan inline */}
+                {showAddUnit && (
+                  <View style={styles.inlineInputRow}>
+                    <TextInput
+                      style={[styles.input, { flex: 1, height: 40, paddingVertical: 8 }]}
+                      value={newUnitInput}
+                      onChangeText={setNewUnitInput}
+                      placeholder="Contoh: botol, lembar, rim..."
+                      autoFocus
+                      onSubmitEditing={handleAddUnit}
+                      returnKeyType="done"
+                    />
+                    <TouchableOpacity style={styles.inlineConfirmBtn} onPress={handleAddUnit}>
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.inlineCancelBtn}
+                      onPress={() => { setShowAddUnit(false); setNewUnitInput(''); }}
+                    >
+                      <Ionicons name="close" size={20} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             )}
           />
         </Field>
 
+        {/* ── Kategori dengan Quick-Add ────────────────────────────────────── */}
         <Field label="Kategori" error={errors.category_id?.message}>
           <Controller
             control={control}
             name="category_id"
             render={({ field: { onChange, value } }) => (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: SPACING.sm }}>
-                <TouchableOpacity
-                  style={[styles.chip, value === null && styles.chipActive]}
-                  onPress={() => onChange(null)}
+              <View style={{ gap: SPACING.sm }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: SPACING.sm, paddingVertical: 2 }}
                 >
-                  <Text style={[styles.chipText, value === null && styles.chipTextActive]}>Tanpa Kategori</Text>
-                </TouchableOpacity>
-                {categories.map((c) => (
                   <TouchableOpacity
-                    key={c.id}
-                    style={[styles.chip, value === c.id && styles.chipActive]}
-                    onPress={() => onChange(c.id)}
+                    style={[styles.chip, value === null && styles.chipActive]}
+                    onPress={() => onChange(null)}
                   >
-                    <Text style={[styles.chipText, value === c.id && styles.chipTextActive]}>{c.name}</Text>
+                    <Text style={[styles.chipText, value === null && styles.chipTextActive]}>Tanpa Kategori</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                  {categories.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[
+                        styles.chip,
+                        value === c.id && styles.chipActive,
+                        value === c.id && { backgroundColor: c.color_hex, borderColor: c.color_hex },
+                      ]}
+                      onPress={() => onChange(c.id)}
+                    >
+                      <View style={[styles.catDot, { backgroundColor: value === c.id ? '#fff' : c.color_hex }]} />
+                      <Text style={[styles.chipText, value === c.id && styles.chipTextActive]}>{c.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {/* Tombol tambah kategori baru */}
+                  <TouchableOpacity
+                    style={styles.addChipBtn}
+                    onPress={() => setShowAddCategory(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="add" size={16} color={COLORS.primary} />
+                    <Text style={styles.addChipText}>Baru</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
             )}
           />
         </Field>
@@ -334,7 +478,7 @@ export default function ProductFormScreen() {
         </Field>
       </ScrollView>
 
-      {/* Floating Action Button */}
+      {/* Floating Save Button */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
         <TouchableOpacity
           style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
@@ -349,6 +493,80 @@ export default function ProductFormScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* ── Modal Tambah Kategori Baru ──────────────────────────────────────── */}
+      <Modal visible={showAddCategory} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, SPACING.lg) }]}>
+            <Text style={styles.modalTitle}>Tambah Kategori Baru</Text>
+            <Text style={styles.modalSubtitle}>
+              Kategori baru akan langsung dipilih untuk produk ini
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.fieldLabel}>Nama Kategori *</Text>
+              <TextInput
+                style={styles.input}
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                placeholder="Contoh: Minuman, Makanan Ringan..."
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.fieldLabel}>Warna Label</Text>
+              <View style={styles.colorRow}>
+                {PRESET_COLORS.map((c) => (
+                  <TouchableOpacity
+                    key={c}
+                    style={[
+                      styles.colorSwatch,
+                      { backgroundColor: c },
+                      newCategoryColor === c && styles.colorSwatchActive,
+                    ]}
+                    onPress={() => setNewCategoryColor(c)}
+                    activeOpacity={0.8}
+                  >
+                    {newCategoryColor === c && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {/* Preview */}
+              <View style={[styles.categoryPreview, { backgroundColor: newCategoryColor + '20', borderColor: newCategoryColor }]}>
+                <View style={[styles.catDot, { backgroundColor: newCategoryColor, width: 10, height: 10 }]} />
+                <Text style={[styles.categoryPreviewText, { color: newCategoryColor }]}>
+                  {newCategoryName || 'Nama Kategori'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => { setShowAddCategory(false); setNewCategoryName(''); setNewCategoryColor(PRESET_COLORS[0]); }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, savingCategory && styles.confirmBtnDisabled]}
+                onPress={handleAddCategory}
+                disabled={savingCategory}
+                activeOpacity={0.8}
+              >
+                {savingCategory ? (
+                  <ActivityIndicator color={COLORS.surface} size="small" />
+                ) : (
+                  <Text style={styles.confirmText}>Simpan & Pilih</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -382,8 +600,12 @@ const styles = StyleSheet.create({
     fontSize: 15, color: COLORS.text,
   },
   errorText: { color: COLORS.danger, fontSize: 12, marginTop: -2 },
+
+  // ── Chip styles ────────────────────────────────────────────────────────────
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  chipWrapper: { position: 'relative' },
   chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm,
     borderRadius: RADIUS.full, backgroundColor: COLORS.surface,
     borderWidth: 1, borderColor: COLORS.border,
@@ -391,6 +613,33 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   chipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600' },
   chipTextActive: { color: COLORS.surface, fontWeight: '700' },
+  removeChipBtn: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.full,
+  },
+  addChipBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.full, backgroundColor: COLORS.background,
+    borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed',
+  },
+  addChipText: { fontSize: 13, color: COLORS.primary, fontWeight: '700' },
+
+  // ── Inline input row (untuk tambah satuan) ─────────────────────────────────
+  inlineInputRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  inlineConfirmBtn: {
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md,
+    width: 40, height: 40, justifyContent: 'center', alignItems: 'center',
+  },
+  inlineCancelBtn: {
+    backgroundColor: COLORS.background, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border,
+    width: 40, height: 40, justifyContent: 'center', alignItems: 'center',
+  },
+
+  // ── Category dot ──────────────────────────────────────────────────────────
+  catDot: { width: 8, height: 8, borderRadius: 4 },
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: SPACING.lg, backgroundColor: COLORS.surface,
@@ -403,44 +652,50 @@ const styles = StyleSheet.create({
   },
   saveBtnDisabled: { backgroundColor: COLORS.primaryLight, elevation: 0 },
   saveBtnText: { color: COLORS.surface, fontSize: 16, fontWeight: '800' },
+
+  // ── Image ──────────────────────────────────────────────────────────────────
   imagePicker: {
-    alignSelf: 'center',
-    width: 140,
-    height: 140,
-    borderRadius: RADIUS.xl,
-    overflow: 'hidden',
-    backgroundColor: COLORS.surface,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-    elevation: 2,
+    alignSelf: 'center', width: 140, height: 140, borderRadius: RADIUS.xl,
+    overflow: 'hidden', backgroundColor: COLORS.surface,
+    borderWidth: 2, borderColor: COLORS.border, borderStyle: 'dashed', elevation: 2,
   },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  imagePlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  imagePlaceholderText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
+  imagePreview: { width: '100%', height: '100%', resizeMode: 'cover' },
+  imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: SPACING.xs },
+  imagePlaceholderText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
   imageEditBadge: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: COLORS.primary,
-    borderRadius: RADIUS.full,
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
+    position: 'absolute', bottom: 8, right: 8,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.full,
+    width: 28, height: 28, justifyContent: 'center', alignItems: 'center', elevation: 4,
   },
+
+  // ── Modal Tambah Kategori ──────────────────────────────────────────────────
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: COLORS.surface, borderTopLeftRadius: RADIUS.xl, borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.xl, paddingTop: SPACING.xl, gap: SPACING.lg,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  modalSubtitle: { fontSize: 13, color: COLORS.textSecondary, marginTop: -SPACING.md },
+  inputGroup: { gap: SPACING.sm },
+  colorRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md },
+  colorSwatch: {
+    width: 38, height: 38, borderRadius: RADIUS.full,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  colorSwatchActive: { borderWidth: 3, borderColor: '#fff', transform: [{ scale: 1.1 }] },
+  categoryPreview: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
+    borderRadius: RADIUS.full, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
+    borderWidth: 1, alignSelf: 'flex-start', marginTop: SPACING.sm,
+  },
+  categoryPreviewText: { fontSize: 14, fontWeight: '700' },
+  modalActions: { flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.sm },
+  cancelBtn: {
+    flex: 1, backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: RADIUS.lg, paddingVertical: SPACING.md, alignItems: 'center',
+  },
+  cancelText: { color: COLORS.textSecondary, fontWeight: '700', fontSize: 15 },
+  confirmBtn: { flex: 1, backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, paddingVertical: SPACING.md, alignItems: 'center', elevation: 2 },
+  confirmBtnDisabled: { backgroundColor: COLORS.primaryLight, elevation: 0 },
+  confirmText: { color: COLORS.surface, fontWeight: '800', fontSize: 15 },
 });

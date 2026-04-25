@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import PINInput from '../components/PINInput';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -47,6 +47,8 @@ const TAB_ICONS: Record<string, string> = {
 
 function TabNavigator() {
   useAutolock();
+  // Ambil insets di dalam komponen agar bisa dipakai untuk tabBarStyle
+  const tabInsets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -58,9 +60,9 @@ function TabNavigator() {
           backgroundColor: COLORS.surface,
           borderTopWidth: 1,
           borderTopColor: COLORS.border,
-          paddingBottom: 6,
+          paddingBottom: tabInsets.bottom > 0 ? tabInsets.bottom : 8,
           paddingTop: 6,
-          height: 60,
+          height: 56 + (tabInsets.bottom > 0 ? tabInsets.bottom : 8),
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },

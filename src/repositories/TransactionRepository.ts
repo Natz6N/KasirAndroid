@@ -146,10 +146,20 @@ export class TransactionRepository {
 
   async getTodaySummary() {
     const db = await getDatabase();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const tomorrowStart = new Date(todayStart);
-    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    // Gunakan waktu WIB (UTC+7) agar konsisten dengan transaction_date yang disimpan via getLocalISO()
+    // getLocalISO() menyimpan format '2024-01-15T08:30:00+07:00', jadi range harus dalam WIB juga
+    const now = new Date();
+    const jakartaOffset = 7 * 60; // UTC+7 dalam menit
+    const localOffset = now.getTimezoneOffset(); // menit, negatif untuk timezones ahead of UTC
+    const jakartaTime = new Date(now.getTime() + (jakartaOffset + localOffset) * 60 * 1000);
+
+    const year = jakartaTime.getFullYear();
+    const month = String(jakartaTime.getMonth() + 1).padStart(2, '0');
+    const day = String(jakartaTime.getDate()).padStart(2, '0');
+
+    const todayStart = `${year}-${month}-${day}T00:00:00+07:00`;
+    const tomorrowStart = `${year}-${month}-${day}T23:59:59.999+07:00`;
+
     return db.getFirstAsync<{
       jumlah_transaksi: number;
       total_penjualan: number;
@@ -164,8 +174,8 @@ export class TransactionRepository {
        FROM transactions
        WHERE status = 'completed'
          AND transaction_date >= ?
-         AND transaction_date < ?`,
-      [todayStart.toISOString(), tomorrowStart.toISOString()]
+         AND transaction_date <= ?`,
+      [todayStart, tomorrowStart]
     );
   }
 }
